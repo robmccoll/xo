@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"text/template"
@@ -33,6 +35,8 @@ func (a *ArgType) NewTemplateFuncs() template.FuncMap {
 		"hascolumn":          a.hascolumn,
 		"hasfield":           a.hasfield,
 		"getstartcount":      a.getstartcount,
+		"slice":              slice,
+		"sum":                sum,
 	}
 }
 
@@ -635,4 +639,124 @@ func (a *ArgType) hasfield(fields []*Field, name string) bool {
 // getstartcount returns a starting count for numbering columsn in queries
 func (a *ArgType) getstartcount(fields []*Field, pkFields []*Field) int {
 	return len(fields) - len(pkFields)
+}
+
+// slice returns the result of slicing its first argument by the following
+// arguments. Thus "slice x 1 5" is, in Go syntax, x[1:5]. Each
+// sliced item must be a slice or array.
+//
+// This method is based on text/template.index
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+// https://raw.githubusercontent.com/golang/go/master/LICENSE
+func slice(item reflect.Value, indices ...reflect.Value) (reflect.Value, error) {
+	v := indirectInterface(item)
+	if !v.IsValid() {
+		return reflect.Value{}, fmt.Errorf("slice of untyped nil")
+	}
+
+	if len(indices) > 2 {
+		return reflect.Value{}, fmt.Errorf("slicing with greater than 2 indices is not supported")
+	}
+	if len(indices) < 1 {
+		return v, nil
+	}
+	var min = 0
+	var max = -1
+	for c, i := range indices {
+		index := indirectInterface(i)
+		var isNil bool
+		if v, isNil = indirect(v); isNil {
+			return reflect.Value{}, fmt.Errorf("slice of nil pointer")
+		}
+		switch v.Kind() {
+		case reflect.Array, reflect.Slice, reflect.String:
+			var x int64
+			switch index.Kind() {
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				x = index.Int()
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+				x = int64(index.Uint())
+			case reflect.Invalid:
+				return reflect.Value{}, fmt.Errorf("cannot slice slice/array with nil")
+			default:
+				return reflect.Value{}, fmt.Errorf("cannot slice slice/array with type %s", index.Type())
+			}
+			if x < 0 || x > int64(v.Len()) {
+				return reflect.Value{}, fmt.Errorf("index out of range: %d", x)
+			}
+			if c == 0 {
+				min = int(x)
+			} else {
+				max = int(x)
+			}
+		case reflect.Invalid:
+			// the loop holds invariant: v.IsValid()
+			panic("unreachable")
+		default:
+			return reflect.Value{}, fmt.Errorf("can't index item of type %s", v.Type())
+		}
+	}
+	if max != -1 {
+		return v.Slice(min, max), nil
+	}
+	return v.Slice(min, v.Len()), nil
+}
+
+// sum returns the sum of the given numbers
+func sum(nums ...reflect.Value) (reflect.Value, error) {
+	var sum int64
+	for _, i := range nums {
+		num := indirectInterface(i)
+		var x int64
+		switch num.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			x = num.Int()
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+			x = int64(num.Uint())
+		case reflect.Invalid:
+			return reflect.Value{}, fmt.Errorf("cannot slice slice/array with nil")
+		default:
+			return reflect.Value{}, fmt.Errorf("cannot slice slice/array with type %s", num.Type())
+		}
+		sum += x
+	}
+	return reflect.ValueOf(sum), nil
+}
+
+// indirectInterface returns the concrete value in an interface value,
+// or else the zero reflect.Value.
+// That is, if v represents the interface value x, the result is the same as reflect.ValueOf(x):
+// the fact that x was an interface value is forgotten.
+//
+// This method is from text/template.indirectInterface
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+// https://raw.githubusercontent.com/golang/go/master/LICENSE
+func indirectInterface(v reflect.Value) reflect.Value {
+	if v.Kind() != reflect.Interface {
+		return v
+	}
+	if v.IsNil() {
+		return reflect.Value{}
+	}
+	return v.Elem()
+}
+
+// indirect returns the item at the end of indirection, and a bool to indicate if it's nil.
+//
+// This method is from text/template.indirect
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+// https://raw.githubusercontent.com/golang/go/master/LICENSE
+func indirect(v reflect.Value) (rv reflect.Value, isNil bool) {
+	for ; v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface; v = v.Elem() {
+		if v.IsNil() {
+			return v, true
+		}
+	}
+	return v, false
 }
