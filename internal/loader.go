@@ -703,6 +703,23 @@ func (tl TypeLoader) LoadTableIndexes(args *ArgType, typeTpl *Type, ixMap map[st
 			return err
 		}
 
+		// for compound indices, make sub index field queries
+		for i := 1; i < len(ixTpl.Fields); i++ {
+			index := *ixTpl
+			ixTplSub := &index
+
+			indexModel := *ixTpl.Index
+			ixTplSub.Index = &indexModel
+
+			ixTplSub.Index.IsUnique = false
+			ixTplSub.Fields = ixTpl.Fields[:len(ixTpl.Fields)-i]
+
+			// build func name
+			args.BuildIndexFuncName(ixTplSub)
+
+			ixMap[typeTpl.Table.TableName+"_"+ixTplSub.FuncName] = ixTplSub
+		}
+
 		// build func name
 		args.BuildIndexFuncName(ixTpl)
 
