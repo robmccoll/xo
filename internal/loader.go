@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/gedex/inflector"
@@ -327,7 +328,14 @@ func (tl TypeLoader) LoadEnums(args *ArgType) (map[string]*Enum, error) {
 	}
 
 	// generate enum templates
+	enumListSorted := make([]*Enum, 0, len(enumMap))
 	for _, e := range enumMap {
+		enumListSorted = append(enumListSorted, e)
+	}
+	sort.Slice(enumListSorted, func(i, j int) bool {
+		return enumListSorted[i].Name < enumListSorted[j].Name
+	})
+	for _, e := range enumListSorted {
 		err = args.ExecuteTemplate(EnumTemplate, e.Name, "", e)
 		if err != nil {
 			return nil, err
@@ -414,7 +422,14 @@ func (tl TypeLoader) LoadProcs(args *ArgType) (map[string]*Proc, error) {
 	}
 
 	// generate proc templates
+	procListSorted := make([]*Proc, 0, len(procMap))
 	for _, p := range procMap {
+		procListSorted = append(procListSorted, p)
+	}
+	sort.Slice(procListSorted, func(i, j int) bool {
+		return procListSorted[i].Name < procListSorted[j].Name
+	})
+	for _, p := range procListSorted {
 		err = args.ExecuteTemplate(ProcTemplate, "sp_"+p.Name, "", p)
 		if err != nil {
 			return nil, err
@@ -488,7 +503,14 @@ func (tl TypeLoader) LoadRelkind(args *ArgType, relType RelType) (map[string]*Ty
 	}
 
 	// generate table templates
+	tableListSorted := make([]*Type, 0, len(tableMap))
 	for _, t := range tableMap {
+		tableListSorted = append(tableListSorted, t)
+	}
+	sort.Slice(tableListSorted, func(i, j int) bool {
+		return tableListSorted[i].Name < tableListSorted[j].Name
+	})
+	for _, t := range tableListSorted {
 		err = args.ExecuteTemplate(TypeTemplate, t.Name, "", t)
 		if err != nil {
 			return nil, err
@@ -568,7 +590,14 @@ func (tl TypeLoader) LoadForeignKeys(args *ArgType, tableMap map[string]*Type) (
 	}
 
 	// generate templates
+	fkList := make([]*ForeignKey, 0, len(fkMap))
 	for _, fk := range fkMap {
+		fkList = append(fkList, fk)
+	}
+	sort.Slice(fkList, func(i, j int) bool {
+		return fkList[i].Name < fkList[j].Name
+	})
+	for _, fk := range fkList {
 		err = args.ExecuteTemplate(ForeignKeyTemplate, fk.Type.Name, fk.ForeignKey.ForeignKeyName, fk)
 		if err != nil {
 			return nil, err
@@ -663,7 +692,13 @@ func (tl TypeLoader) LoadIndexes(args *ArgType, tableMap map[string]*Type) (map[
 	}
 
 	// generate templates
-	for _, ix := range ixMap {
+	ixList := make([]string, 0, len(ixMap))
+	for ixName := range ixMap {
+		ixList = append(ixList, ixName)
+	}
+	sort.Strings(ixList)
+	for _, ixName := range ixList {
+		ix := ixMap[ixName]
 		err = args.ExecuteTemplate(IndexTemplate, ix.Type.Name, ix.Index.IndexName, ix)
 		if err != nil {
 			return nil, err
