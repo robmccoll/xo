@@ -39,6 +39,7 @@ func (a *ArgType) NewTemplateFuncs() template.FuncMap {
 		"slice":              slice,
 		"sum":                sum,
 		"lowerfirst":         lowerfirst,
+		"lower":              lower,
 	}
 }
 
@@ -774,4 +775,9 @@ func lowerfirst(s string) string {
 		}
 	}
 	return s
+}
+
+// lower lowers the string
+func lower(s string) string {
+	return strings.ToLower(s)
 }
