@@ -40,6 +40,7 @@ func (a *ArgType) NewTemplateFuncs() template.FuncMap {
 		"sum":                sum,
 		"lowerfirst":         lowerfirst,
 		"lower":              lower,
+		"contains":           contains,
 	}
 }
 
@@ -780,4 +781,9 @@ func lowerfirst(s string) string {
 // lower lowers the string
 func lower(s string) string {
 	return strings.ToLower(s)
+}
+
+// contains containss the string
+func contains(str, s string) bool {
+	return strings.Contains(str, s)
 }
