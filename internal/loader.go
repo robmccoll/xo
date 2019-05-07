@@ -289,6 +289,13 @@ func (tl TypeLoader) LoadSchema(args *ArgType) error {
 		return err
 	}
 
+	// render tables and views as types do this last because the indexed field
+	// info in .Type is filled by loading inndexes
+	err = tl.ExecuteTypes(args, tableMap)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -502,6 +509,11 @@ func (tl TypeLoader) LoadRelkind(args *ArgType, relType RelType) (map[string]*Ty
 		tableMap[ti.TableName] = typeTpl
 	}
 
+	return tableMap, nil
+}
+
+// ExecuteTypes renders type templates for tables and views
+func (tl TypeLoader) ExecuteTypes(args *ArgType, tableMap map[string]*Type) error {
 	// generate table templates
 	tableListSorted := make([]*Type, 0, len(tableMap))
 	for _, t := range tableMap {
@@ -511,13 +523,13 @@ func (tl TypeLoader) LoadRelkind(args *ArgType, relType RelType) (map[string]*Ty
 		return tableListSorted[i].Name < tableListSorted[j].Name
 	})
 	for _, t := range tableListSorted {
-		err = args.ExecuteTemplate(TypeTemplate, t.Name, "", t)
+		err := args.ExecuteTemplate(TypeTemplate, t.Name, "", t)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return tableMap, nil
+	return nil
 }
 
 // LoadColumns loads schema table/view columns.
@@ -562,6 +574,17 @@ func (tl TypeLoader) LoadColumns(args *ArgType, typeTpl *Type) error {
 			typeTpl.PrimaryKeyFields = append(typeTpl.PrimaryKeyFields, f)
 			// This is retained for backward compatibility in the templates.
 			typeTpl.PrimaryKey = f
+
+			addField := f
+			for _, f := range typeTpl.IndexedFields {
+				if f.Col.ColumnName == addField.Col.ColumnName {
+					addField = nil
+					break
+				}
+			}
+			if addField != nil {
+				typeTpl.IndexedFields = append(typeTpl.IndexedFields, addField)
+			}
 		}
 
 		// append col to template fields
@@ -821,6 +844,17 @@ func (tl TypeLoader) LoadIndexColumns(args *ArgType, ixTpl *Index) error {
 		}
 
 		ixTpl.Fields = append(ixTpl.Fields, field)
+
+		addField := field
+		for _, f := range ixTpl.Type.IndexedFields {
+			if f.Col.ColumnName == addField.Col.ColumnName {
+				addField = nil
+				break
+			}
+		}
+		if addField != nil {
+			ixTpl.Type.IndexedFields = append(ixTpl.Type.IndexedFields, addField)
+		}
 	}
 
 	return nil

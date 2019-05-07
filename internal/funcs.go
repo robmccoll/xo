@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"unicode"
 
 	"github.com/knq/snaker"
 
@@ -37,6 +38,7 @@ func (a *ArgType) NewTemplateFuncs() template.FuncMap {
 		"getstartcount":      a.getstartcount,
 		"slice":              slice,
 		"sum":                sum,
+		"lowerfirst":         lowerfirst,
 	}
 }
 
@@ -759,4 +761,17 @@ func indirect(v reflect.Value) (rv reflect.Value, isNil bool) {
 		}
 	}
 	return v, false
+}
+
+// lowerfirst lowers only the first rune in the string
+func lowerfirst(s string) string {
+	var first rune
+	for i, r := range s {
+		if i == 0 {
+			first = unicode.ToLower(r)
+		} else {
+			return string(first) + s[i:]
+		}
+	}
+	return s
 }
