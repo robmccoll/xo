@@ -834,7 +834,7 @@ func (tl TypeLoader) LoadIndexColumns(args *ArgType, ixTpl *Index) (skip bool, e
 		if ic.Cid == 0 {
 			skip = true
 			expr := &Expression{
-				Function: ic.Function,
+				Function:  ic.Function,
 				Collation: ic.Collation,
 			}
 

@@ -41,6 +41,8 @@ func (a *ArgType) NewTemplateFuncs() template.FuncMap {
 		"lowerfirst":         lowerfirst,
 		"lower":              lower,
 		"contains":           contains,
+		"cameltosnake":       snaker.CamelToSnake,
+		"snaketocamel":       snaker.SnakeToCamel,
 	}
 }
 
