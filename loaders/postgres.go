@@ -1,6 +1,7 @@
 package loaders
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -297,12 +298,33 @@ func PgQueryColumns(args *internal.ArgType, inspect []string) ([]*models.Column,
 	return models.PgTableColumns(args.DB, schema, xoid, false)
 }
 
+func pgIntList(s string) ([]int, error) {
+	var err error
+
+	splits := strings.Split(s, " ")
+	out := make([]int, len(splits))
+
+	for i, v := range splits {
+		out[i], err = strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("could not convert %s int", v)
+		}
+	}
+	return out, nil
+}
+
 // PgIndexColumns returns the column list for an index.
 func PgIndexColumns(db models.XODB, schema string, table string, index string) ([]*models.IndexColumn, error) {
 	var err error
 
 	// load columns
 	cols, err := models.PgIndexColumns(db, schema, index)
+	if err != nil {
+		return nil, err
+	}
+
+	// load table columns (for exrpession index use)
+	tcols, err := models.PgTableColumns(db, schema, table, internal.Args.EnablePostgresOIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -319,28 +341,79 @@ func PgIndexColumns(db models.XODB, schema string, table string, index string) (
 		s = s + "."
 	}
 
-	// put cols in order using colOrder
-	ret := []*models.IndexColumn{}
-	for _, v := range strings.Split(colOrd.Ord, " ") {
-		cid, err := strconv.Atoi(v)
-		if err != nil {
-			return nil, fmt.Errorf("could not convert %s%s index %s column %s to int", s, table, index, v)
-		}
+	ordCids, err := pgIntList(colOrd.Ord)
+	if err != nil {
+		return nil, fmt.Errorf("at %s%s index %s col order - %v", s, table, index, err)
+	}
 
+	ordColls, err := pgIntList(colOrd.Collation)
+	if err != nil {
+		return nil, fmt.Errorf("at %s%s index %s col collation - %v", s, table, index, err)
+	}
+
+	// put cols in order using colOrder
+	var curExpr int
+	ret := []*models.IndexColumn{}
+	for i, cid := range ordCids {
 		// find column
 		found := false
 		var c *models.IndexColumn
-		for _, ic := range cols {
-			if cid == ic.Cid {
-				found = true
-				c = ic
-				break
+		_ = tcols
+
+		// zero indicates an expression
+		if cid == 0 {
+			c = &models.IndexColumn{}
+
+			expr := colOrd.Exprs.List[curExpr]
+			if expr.Type != "FUNCEXPR" {
+				return nil, fmt.Errorf("unsupported expression type %v", expr.Type)
+			}
+
+			proc, err := models.PgProcByOid(db, expr.Fields["funcid"].AsInt())
+			if err != nil {
+				return nil, err
+			}
+
+			c.Function = proc.ProcName
+
+			collate, err := models.PgCollationByOid(db, ordColls[i])
+			if err != nil {
+				return nil, err
+			}
+
+			c.Collation = collate.CollName
+
+			for _, a := range expr.Fields["args"].List {
+				if a.Type != "VAR" {
+					return nil, fmt.Errorf("unsupported arg type %v", a.Type)
+				}
+				tcid := a.Fields["varattno"].AsInt()
+				for _, tc := range tcols {
+					if tcid == tc.FieldOrdinal {
+						c.Columns = append(c.Columns, tc)
+					}
+				}
+			}
+
+			curExpr++
+			found = true
+		} else {
+			for _, ic := range cols {
+				if cid == ic.Cid {
+					found = true
+					c = ic
+					break
+				}
 			}
 		}
 
 		// sanity check
 		if !found {
-			return nil, fmt.Errorf("could not find %s%s index %s column id %d", s, table, index, cid)
+			js, _ := json.Marshal(cols)
+			js2, _ := json.Marshal(colOrd)
+			fmt.Println("cols", string(js))
+			fmt.Println("colOrd", string(js2))
+			return nil, fmt.Errorf("could not find %s%s index %s column id %d %v", s, table, index, cid, cols)
 		}
 
 		ret = append(ret, c)

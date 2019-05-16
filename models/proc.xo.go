@@ -83,3 +83,25 @@ func MyProcs(db XODB, schema string) ([]*Proc, error) {
 
 	return res, nil
 }
+
+// PgProcByOid runs a custom query, returning results as Proc.
+func PgProcByOid(db XODB, oid int) (*Proc, error) {
+	var err error
+
+	// sql query
+	const sqlstr = `SELECT ` +
+		`p.proname, ` + // ::varchar AS proc_name
+		`pg_get_function_result(p.oid) ` + // ::varchar AS return_type
+		`FROM pg_proc p ` +
+		`WHERE p.oid = $1`
+
+	// run query
+	XOLog(sqlstr, oid)
+	var p Proc
+	err = db.QueryRow(sqlstr, oid).Scan(&p.ProcName, &p.ReturnType)
+	if err != nil {
+		return nil, err
+	}
+
+	return &p, nil
+}

@@ -756,9 +756,12 @@ func (tl TypeLoader) LoadTableIndexes(args *ArgType, typeTpl *Type, ixMap map[st
 		}
 
 		// load index columns
-		err = tl.LoadIndexColumns(args, ixTpl)
+		skip, err := tl.LoadIndexColumns(args, ixTpl)
 		if err != nil {
 			return err
+		}
+		if skip {
+			continue
 		}
 
 		// for compound indices, make sub index field queries
@@ -817,18 +820,42 @@ func (tl TypeLoader) LoadTableIndexes(args *ArgType, typeTpl *Type, ixMap map[st
 }
 
 // LoadIndexColumns loads the index column information.
-func (tl TypeLoader) LoadIndexColumns(args *ArgType, ixTpl *Index) error {
-	var err error
-
+func (tl TypeLoader) LoadIndexColumns(args *ArgType, ixTpl *Index) (skip bool, err error) {
 	// load index columns
 	indexCols, err := tl.IndexColumnList(args.DB, args.Schema, ixTpl.Type.Table.TableName, ixTpl.Index.IndexName)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// process index columns
 	for _, ic := range indexCols {
 		var field *Field
+
+		if ic.Cid == 0 {
+			skip = true
+			expr := &Expression{
+				Function: ic.Function,
+				Collation: ic.Collation,
+			}
+
+			for _, ec := range ic.Columns {
+				// find field
+				for _, f := range ixTpl.Type.Fields {
+					if f.Col.ColumnName == ec.ColumnName {
+						field = f
+						break
+					}
+				}
+				if field == nil {
+					continue
+				}
+
+				expr.Fields = append(expr.Fields, field)
+			}
+
+			ixTpl.Type.IndexedExprs = append(ixTpl.Type.IndexedExprs, expr)
+			continue
+		}
 
 	fieldLoop:
 		// find field
@@ -857,5 +884,5 @@ func (tl TypeLoader) LoadIndexColumns(args *ArgType, ixTpl *Index) error {
 		}
 	}
 
-	return nil
+	return skip, nil
 }

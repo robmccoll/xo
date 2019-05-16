@@ -5,7 +5,9 @@ package models
 
 // PgColOrder represents index column order.
 type PgColOrder struct {
-	Ord string // ord
+	Ord       string     // ord
+	Collation string     // collation
+	Exprs     PgNodeTree // exprs
 }
 
 // PgGetColOrder runs a custom query, returning results as PgColOrder.
@@ -14,7 +16,9 @@ func PgGetColOrder(db XODB, schema string, index string) (*PgColOrder, error) {
 
 	// sql query
 	const sqlstr = `SELECT ` +
-		`i.indkey ` + // ::varchar AS ord
+		`i.indkey, ` + // ::varchar AS ord
+		`i.indcollation, ` + // ::varchar AS collation
+		`i.indexprs AS exprs ` +
 		`FROM pg_index i ` +
 		`JOIN ONLY pg_class c ON c.oid = i.indrelid ` +
 		`JOIN ONLY pg_namespace n ON n.oid = c.relnamespace ` +
@@ -24,7 +28,7 @@ func PgGetColOrder(db XODB, schema string, index string) (*PgColOrder, error) {
 	// run query
 	XOLog(sqlstr, schema, index)
 	var pco PgColOrder
-	err = db.QueryRow(sqlstr, schema, index).Scan(&pco.Ord)
+	err = db.QueryRow(sqlstr, schema, index).Scan(&pco.Ord, &pco.Collation, &pco.Exprs)
 	if err != nil {
 		return nil, err
 	}

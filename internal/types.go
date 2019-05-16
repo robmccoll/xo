@@ -126,6 +126,7 @@ type Type struct {
 	PrimaryKeyFields []*Field
 	Fields           []*Field
 	IndexedFields    []*Field
+	IndexedExprs     []*Expression
 	Table            *models.Table
 	Comment          string
 }
@@ -142,12 +143,22 @@ type ForeignKey struct {
 	Comment    string
 }
 
+// Expression is a function over columns and a colation
+// NOTE XXX this is a very limited definition that is only useful for a limited
+// number of cases (mainly used for lower(column) COLLATE "C")
+type Expression struct {
+	Function  string
+	Fields    []*Field
+	Collation string
+}
+
 // Index is a template item for a index into a table.
 type Index struct {
 	FuncName string
 	Schema   string
 	Type     *Type
 	Fields   []*Field
+	Exprs    []*Expression
 	Index    *models.Index
 	Comment  string
 }

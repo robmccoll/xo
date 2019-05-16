@@ -60,6 +60,15 @@ FROM pg_class s
 WHERE n.nspname = %%schema string%% AND s.relkind = 'S'
 ENDSQL
 
+# postgres collation oid query
+COMMENT='Collation represents a sort ordering for string data.'
+$XOBIN $PGDB -1 -N -M -B -T Collation -F PgCollationByOid --query-type-comment "$COMMENT" -o $DEST $EXTRA << ENDSQL
+SELECT
+  collname::varchar AS coll_name
+FROM pg_collation
+WHERE oid = %%oid int%%
+ENDSQL
+
 # postgres proc list query
 COMMENT='Proc represents a stored procedure.'
 $XOBIN $PGDB -N -M -B -T Proc -F PgProcs --query-type-comment "$COMMENT" -o $DEST $EXTRA << ENDSQL
@@ -69,6 +78,15 @@ SELECT
 FROM pg_proc p
   JOIN ONLY pg_namespace n ON p.pronamespace = n.oid
 WHERE n.nspname = %%schema string%%
+ENDSQL
+
+# postgres proc oid query
+$XOBIN $PGDB -a -1 -N -M -B -T Proc -F PgProcByOid -o $DEST $EXTRA << ENDSQL
+SELECT
+  p.proname::varchar AS proc_name,
+  pg_get_function_result(p.oid)::varchar AS return_type
+FROM pg_proc p
+WHERE p.oid = %%oid int%%
 ENDSQL
 
 # postgres proc parameter list query
@@ -152,12 +170,12 @@ FROM pg_index i
   JOIN ONLY pg_class c ON c.oid = i.indrelid
   JOIN ONLY pg_namespace n ON n.oid = c.relnamespace
   JOIN ONLY pg_class ic ON ic.oid = i.indexrelid
-WHERE i.indkey <> '0' AND n.nspname = %%schema string%% AND c.relname = %%table string%%
+WHERE n.nspname = %%schema string%% AND c.relname = %%table string%%
 ENDSQL
 
 # postgres index column list query
 COMMENT='IndexColumn represents index column info.'
-$XOBIN $PGDB -N -M -B -T IndexColumn -F PgIndexColumns --query-type-comment "$COMMENT" -o $DEST $EXTRA << ENDSQL
+$XOBIN $PGDB -a -N -M -B -T IndexColumn -F PgIndexColumns --query-type-comment "$COMMENT" -o $DEST $EXTRA << ENDSQL
 SELECT
   (row_number() over())::integer AS seq_no,
   a.attnum::integer AS cid,
@@ -167,7 +185,7 @@ FROM pg_index i
   JOIN ONLY pg_namespace n ON n.oid = c.relnamespace
   JOIN ONLY pg_class ic ON ic.oid = i.indexrelid
   LEFT JOIN pg_attribute a ON i.indrelid = a.attrelid AND a.attnum = ANY(i.indkey) AND a.attisdropped = false
-WHERE i.indkey <> '0' AND n.nspname = %%schema string%% AND ic.relname = %%index string%%
+WHERE n.nspname = %%schema string%% AND ic.relname = %%index string%%
 ENDSQL
 
 # postgres index column order query
@@ -175,6 +193,8 @@ COMMENT='PgColOrder represents index column order.'
 $XOBIN $PGDB -N -M -B -1 -T PgColOrder -F PgGetColOrder --query-type-comment "$COMMENT" -o $DEST $EXTRA << ENDSQL
 SELECT
   i.indkey::varchar AS ord
+  i.indcollation::varchar AS collation
+  i.indexprs::varchar AS exprs
 FROM pg_index i
   JOIN ONLY pg_class c ON c.oid = i.indrelid
   JOIN ONLY pg_namespace n ON n.oid = c.relnamespace
