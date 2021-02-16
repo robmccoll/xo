@@ -722,7 +722,7 @@ func (tl TypeLoader) LoadIndexes(args *ArgType, tableMap map[string]*Type) (map[
 	sort.Strings(ixList)
 	for _, ixName := range ixList {
 		ix := ixMap[ixName]
-		err = args.ExecuteTemplate(IndexTemplate, ix.Type.Name, ix.Index.IndexName, ix)
+		err = args.ExecuteTemplate(IndexTemplate, ix.Type.Name, ixName, ix)
 		if err != nil {
 			return nil, err
 		}
